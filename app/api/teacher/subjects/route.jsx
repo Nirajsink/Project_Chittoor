@@ -10,7 +10,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // Disable RLS temporarily for testing
     const { data: assignments, error } = await supabase
       .from('teacher_assignments')
       .select(`
@@ -18,7 +17,9 @@ export async function GET() {
           id,
           name,
           description,
+          class_id,
           classes (
+            id,
             name
           )
         )
@@ -27,13 +28,14 @@ export async function GET() {
     
     if (error) {
       console.error('Database error:', error)
-      return NextResponse.json({ error: 'Database error', details: error.message }, { status: 500 })
+      return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
     
     const subjects = assignments?.map(assignment => ({
       id: assignment.subjects.id,
       name: assignment.subjects.name,
       description: assignment.subjects.description,
+      class_id: assignment.subjects.class_id,
       class_name: assignment.subjects.classes?.name
     })) || []
     
@@ -41,6 +43,6 @@ export async function GET() {
     
   } catch (error) {
     console.error('API error:', error)
-    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

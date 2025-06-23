@@ -16,16 +16,17 @@ export async function GET() {
         id,
         name,
         description,
-        classes(name)
+        class_id,
+        classes(id, name)
       `)
       .order('name')
     
     if (error) throw error
     
-    const formattedSubjects = subjects.map(subject => ({
+    const formattedSubjects = subjects?.map(subject => ({
       ...subject,
       class_name: subject.classes?.name
-    }))
+    })) || []
     
     return NextResponse.json({ subjects: formattedSubjects })
     

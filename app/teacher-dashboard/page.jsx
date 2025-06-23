@@ -65,6 +65,9 @@ export default function TeacherDashboard() {
       const res = await fetch('/api/teacher/subjects')
       const data = await res.json()
       setSubjects(data.subjects || [])
+      if (data.subjects?.length > 0) {
+        setSelectedSubject(data.subjects[0])
+      }
     } catch (error) {
       console.error('Error fetching subjects:', error)
     }
@@ -257,27 +260,25 @@ export default function TeacherDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      {/* Header */}
-<header className="bg-white shadow border-b">
-  <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-    <div>
-      <h1 className="text-2xl font-bold">Teacher Dashboard</h1>
-      <p className="text-gray-600">Welcome, {user?.fullName}</p>
-    </div>
-    <div className="flex gap-2">
-      <Link
-        href="/teacher-dashboard/progress"
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center gap-2"
-      >
-        <span>📊</span> Student Progress
-      </Link>
-      <button onClick={handleLogout} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-        Logout
-      </button>
-    </div>
-  </div>
-</header>
-
+      <header className="bg-white shadow border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">Teacher Dashboard</h1>
+            <p className="text-gray-600">Welcome, {user?.fullName}</p>
+          </div>
+          <div className="flex gap-2">
+            <Link
+              href="/teacher-dashboard/progress"
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center gap-2"
+            >
+              <span>📊</span> Student Progress
+            </Link>
+            <button onClick={handleLogout} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
       
       <main className="max-w-7xl mx-auto p-6">
         {/* Subject Cards */}
@@ -295,7 +296,7 @@ export default function TeacherDashboard() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold text-gray-900">{subject.name}</h3>
                   <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                    {subject.class_name}
+                    Class {subject.class_id}
                   </span>
                 </div>
                 <p className="text-gray-600 text-sm mb-3">{subject.description}</p>

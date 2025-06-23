@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 export async function GET(request, { params }) {
   try {
     const session = await getSession()
-    const { className } = await params
+    const { classId } = await params
     
     if (!session || session.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -15,12 +15,12 @@ export async function GET(request, { params }) {
       .from('auth_users')
       .select('id, roll_number, full_name, class, created_at')
       .eq('role', 'student')
-      .eq('class', decodeURIComponent(className))
+      .eq('class', classId) // Now using integer class ID
       .order('roll_number')
     
     if (error) throw error
     
-    return NextResponse.json({ students })
+    return NextResponse.json({ students: students || [] })
     
   } catch (error) {
     console.error('Error fetching students:', error)

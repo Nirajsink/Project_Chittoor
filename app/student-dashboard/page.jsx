@@ -3,27 +3,28 @@ import { useState, useEffect } from 'react'
 
 export default function StudentDashboard() {
   const [user, setUser] = useState(null)
+  const [contentData, setContentData] = useState([])
   const [subjects, setSubjects] = useState([])
   const [selectedSubject, setSelectedSubject] = useState(null)
-  const [chapters, setChapters] = useState([])
-  const [materials, setMaterials] = useState({
-    textbook: [],
-    ppt: [],
-    quiz: []
-  })
+  const [subjectContent, setSubjectContent] = useState({})
   const [activeSection, setActiveSection] = useState('textbook')
+  const [loading, setLoading] = useState(true)
   
   useEffect(() => {
     fetchUser()
-    fetchSubjects()
   }, [])
   
   useEffect(() => {
-    if (selectedSubject) {
-      fetchChapters(selectedSubject.id)
-      fetchMaterials(selectedSubject.id)
+    if (user?.rollNumber) {
+      fetchStudentContent()
     }
-  }, [selectedSubject])
+  }, [user])
+  
+  useEffect(() => {
+    if (contentData.length > 0) {
+      organizeContentBySubjects()
+    }
+  }, [contentData])
   
   const fetchUser = async () => {
     try {
@@ -35,64 +36,81 @@ export default function StudentDashboard() {
     }
   }
   
-  const fetchSubjects = async () => {
+  const fetchStudentContent = async () => {
+    setLoading(true)
     try {
-      const res = await fetch('/api/student/subjects')
+      const res = await fetch('/api/student/content-view')
       const data = await res.json()
-      setSubjects(data.subjects || [])
-      if (data.subjects?.length > 0) {
-        setSelectedSubject(data.subjects[0])
+      
+      setContentData(data.content || [])
+    } catch (error) {
+      console.error('Error fetching content:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  const organizeContentBySubjects = () => {
+    const subjectMap = {}
+    const subjectsList = []
+    
+    contentData.forEach(item => {
+      const subjectName = item.subject_name
+      
+      // Create subject entry if doesn't exist
+      if (!subjectMap[subjectName]) {
+        subjectMap[subjectName] = {
+          name: subjectName,
+          chapters: {}
+        }
+        subjectsList.push(subjectMap[subjectName])
       }
-    } catch (error) {
-      console.error('Error fetching subjects:', error)
+      
+      const chapterName = item.chapter_name
+      
+      // Create chapter entry if doesn't exist
+      if (!subjectMap[subjectName].chapters[chapterName]) {
+        subjectMap[subjectName].chapters[chapterName] = {
+          name: chapterName,
+          textbook: [],
+          ppt: [],
+          quiz: []
+        }
+      }
+      
+      // Categorize content by type
+      if (item.content_type === 'pdf' || item.content_type === 'textbook') {
+        subjectMap[subjectName].chapters[chapterName].textbook.push(item)
+      } else if (item.content_type === 'ppt' || item.content_type === 'presentation') {
+        subjectMap[subjectName].chapters[chapterName].ppt.push(item)
+      } else if (item.content_type === 'quiz') {
+        subjectMap[subjectName].chapters[chapterName].quiz.push(item)
+      }
+    })
+    
+    setSubjects(subjectsList)
+    setSubjectContent(subjectMap)
+    
+    // Auto-select first subject
+    if (subjectsList.length > 0 && !selectedSubject) {
+      setSelectedSubject(subjectsList[0])
     }
   }
   
-  const fetchChapters = async (subjectId) => {
+  // Add content analytics tracking function
+  const trackContentView = async (contentId) => {
     try {
-      const res = await fetch(`/api/student/chapters/${subjectId}`)
-      const data = await res.json()
-      setChapters(data.chapters || [])
-    } catch (error) {
-      console.error('Error fetching chapters:', error)
-    }
-  }
-  
-  const fetchMaterials = async (subjectId) => {
-    try {
-      const res = await fetch(`/api/student/content/${subjectId}`)
-      const data = await res.json()
-      const allMaterials = data.contents || []
-      
-      // Get quizzes separately
-      const quizRes = await fetch(`/api/student/quizzes/${subjectId}`)
-      const quizData = await quizRes.json()
-      const quizzes = quizData.quizzes || []
-      
-      setMaterials({
-        textbook: allMaterials.filter(m => m.type === 'textbook' || m.type === 'pdf'),
-        ppt: allMaterials.filter(m => m.type === 'ppt' || m.type === 'presentation'),
-        quiz: quizzes
+      await fetch('/api/content/analytics/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contentId,
+          timeSpent: 30 // Track 30 seconds per view
+        })
       })
     } catch (error) {
-      console.error('Error fetching materials:', error)
+      console.error('Error tracking content view:', error)
     }
-  }
-  
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
-  
-  const getFileUrl = (content) => {
-    if (content.file_url.startsWith('http')) {
-      return content.file_url
-    }
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/course-materials/${content.file_url}`
-  }
-  
-  const getMaterialsByChapter = (chapterId, type) => {
-    return materials[type].filter(material => material.chapter_id === chapterId)
   }
   
   const getContentIcon = (type) => {
@@ -113,14 +131,41 @@ export default function StudentDashboard() {
     }
   }
   
-  const checkQuizAttempted = async (quizId) => {
-    try {
-      const res = await fetch(`/api/student/quiz-attempt/${quizId}`)
-      const data = await res.json()
-      return data.attempted
-    } catch (error) {
-      return false
+  const getFileUrl = (content) => {
+    if (content.file_url && content.file_url.startsWith('http')) {
+      return content.file_url
     }
+    return content.file_url || '#'
+  }
+  
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
+  }
+  
+  const getCurrentSubjectContent = () => {
+    if (!selectedSubject || !subjectContent[selectedSubject.name]) {
+      return {}
+    }
+    return subjectContent[selectedSubject.name].chapters
+  }
+  
+  const getTotalContentCount = (type) => {
+    const chapters = getCurrentSubjectContent()
+    return Object.values(chapters).reduce((total, chapter) => {
+      return total + (chapter[type]?.length || 0)
+    }, 0)
+  }
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p>Loading your subjects...</p>
+        </div>
+      </div>
+    )
   }
   
   return (
@@ -130,7 +175,7 @@ export default function StudentDashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">Student Dashboard</h1>
-            <p className="text-gray-600">Welcome, {user?.fullName} - {user?.class}</p>
+            <p className="text-gray-600">Welcome, {user?.fullName} - Class {user?.class}</p>
           </div>
           <button onClick={handleLogout} className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
             Logout
@@ -140,122 +185,124 @@ export default function StudentDashboard() {
       
       <main className="max-w-7xl mx-auto p-6">
         {/* Subject Selection */}
-        <div className="mb-8">
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-bold mb-4">My Subjects</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {subjects.map(subject => (
-              <div
-                key={subject.id}
-                onClick={() => setSelectedSubject(subject)}
-                className={`bg-white rounded-lg shadow-md p-6 cursor-pointer transition-all hover:shadow-lg ${
-                  selectedSubject?.id === subject.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                }`}
-              >
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{subject.name}</h3>
-                <p className="text-gray-600 text-sm">{subject.description}</p>
-                <div className="mt-3 flex items-center text-sm text-gray-500">
-                  <span>📚 Click to view study materials</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          
+          {subjects.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <span className="text-4xl mb-4 block">📚</span>
+              <h3 className="text-lg font-medium mb-2">No Subjects Available</h3>
+              <p className="text-sm">Your subjects haven't been set up yet. Contact your teacher or admin.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {subjects.map((subject, index) => {
+                const chapterCount = Object.keys(subjectContent[subject.name]?.chapters || {}).length
+                const totalContent = Object.values(subjectContent[subject.name]?.chapters || {}).reduce((total, chapter) => {
+                  return total + (chapter.textbook?.length || 0) + (chapter.ppt?.length || 0) + (chapter.quiz?.length || 0)
+                }, 0)
+                
+                return (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedSubject(subject)}
+                    className={`p-4 rounded-lg border-2 transition-all text-left ${
+                      selectedSubject?.name === subject.name
+                        ? 'border-blue-500 bg-blue-50 shadow-md'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                    }`}
+                  >
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{subject.name}</h3>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <p>📖 {chapterCount} chapters</p>
+                      <p>📄 {totalContent} materials</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
         
-        {/* Selected Subject Study Materials */}
+        {/* Selected Subject Content */}
         {selectedSubject && (
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-bold mb-6">{selectedSubject.name} - Study Materials</h2>
             
             {/* Content Type Tabs */}
-            <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg mb-6">
               {[
                 { key: 'textbook', label: 'TextBooks', icon: '📚' },
                 { key: 'ppt', label: 'Presentations', icon: '📊' },
                 { key: 'quiz', label: 'Quizzes', icon: '🧠' }
-              ].map(section => (
-                <button
-                  key={section.key}
-                  onClick={() => setActiveSection(section.key)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-md transition-colors ${
-                    activeSection === section.key 
-                      ? 'bg-white shadow text-blue-600 font-semibold' 
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  <span className="text-lg">{section.icon}</span>
-                  <span className="font-medium">{section.label}</span>
-                  <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">
-                    {materials[section.key].length}
-                  </span>
-                </button>
-              ))}
+              ].map(section => {
+                const count = getTotalContentCount(section.key)
+                
+                return (
+                  <button
+                    key={section.key}
+                    onClick={() => setActiveSection(section.key)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-md transition-colors ${
+                      activeSection === section.key 
+                        ? 'bg-white shadow text-blue-600 font-semibold' 
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    <span className="text-lg">{section.icon}</span>
+                    <span className="font-medium">{section.label}</span>
+                    <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
             
-            {/* Content Display by Chapters */}
-            <div className="space-y-6">
-              {chapters.map(chapter => {
-                const chapterMaterials = getMaterialsByChapter(chapter.id, activeSection)
+            {/* Chapter Content */}
+            <div className="space-y-4">
+              {Object.entries(getCurrentSubjectContent()).map(([chapterName, chapterData]) => {
+                const sectionContent = chapterData[activeSection] || []
                 const color = getContentColor(activeSection)
                 
                 return (
-                  <div key={chapter.id} className="border rounded-lg p-4">
+                  <div key={chapterName} className="border rounded-lg p-4">
                     <h3 className="text-lg font-semibold mb-3 text-gray-800 flex items-center gap-2">
                       <span>{getContentIcon(activeSection)}</span>
-                      {chapter.name}
+                      {chapterName}
                       <span className="text-sm text-gray-500 ml-2">
-                        ({chapterMaterials.length} {activeSection} files)
+                        ({sectionContent.length} {activeSection} files)
                       </span>
                     </h3>
                     
-                    {chapterMaterials.length > 0 ? (
+                    {sectionContent.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {chapterMaterials.map(material => (
-                          <div key={material.id} className={`bg-${color}-50 border border-${color}-200 rounded p-3 hover:bg-${color}-100 transition-colors`}>
-                            {activeSection === 'quiz' ? (
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-lg">{getContentIcon(activeSection)}</span>
-                                  <div>
-                                    <h4 className="font-medium text-sm">{material.title}</h4>
-                                    <p className="text-xs text-gray-600">
-                                      {material.total_questions} questions • {material.time_limit}min
-                                    </p>
-                                  </div>
+                        {sectionContent.map((content, index) => (
+                          <div key={index} className={`bg-${color}-50 border border-${color}-200 rounded p-3 hover:bg-${color}-100 transition-colors`}>
+                            <a
+                              href={getFileUrl(content)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => trackContentView(content.id)}
+                              className="flex items-center justify-between text-blue-600 hover:text-blue-800"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <span className="text-lg">{getContentIcon(activeSection)}</span>
+                                <div>
+                                  <h4 className="font-medium text-sm">{content.content_title}</h4>
+                                  <p className="text-xs text-gray-600">{content.content_type?.toUpperCase()}</p>
                                 </div>
-                                <button
-                                  onClick={() => window.location.href = `/student-dashboard/quiz/${material.id}`}
-                                  className={`text-${color}-600 hover:text-${color}-800 text-sm font-medium px-3 py-1 rounded border border-${color}-300`}
-                                >
-                                  Take Quiz
-                                </button>
                               </div>
-                            ) : (
-                              <a
-                                href={getFileUrl(material)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between text-blue-600 hover:text-blue-800"
-                              >
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-lg">{getContentIcon(activeSection)}</span>
-                                  <div>
-                                    <h4 className="font-medium text-sm">{material.title}</h4>
-                                    <p className="text-xs text-gray-600">{material.type?.toUpperCase()}</p>
-                                  </div>
-                                </div>
-                                <span className={`text-${color}-600 hover:text-${color}-800 text-sm font-medium`}>
-                                  Open
-                                </span>
-                              </a>
-                            )}
+                              <span className={`text-${color}-600 hover:text-${color}-800 text-sm font-medium`}>
+                                Open
+                              </span>
+                            </a>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <span className="text-3xl mb-2 block">{getContentIcon(activeSection)}</span>
-                        <p>No {activeSection} materials available</p>
-                        <p className="text-sm">Your teacher hasn't uploaded {activeSection} content yet</p>
+                      <div className="text-center py-6 text-gray-500">
+                        <span className="text-2xl mb-2 block">{getContentIcon(activeSection)}</span>
+                        <p className="text-sm">No {activeSection} materials available for this chapter</p>
                       </div>
                     )}
                   </div>

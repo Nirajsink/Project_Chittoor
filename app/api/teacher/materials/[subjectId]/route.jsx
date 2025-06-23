@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
     const { data: chapters } = await supabase
       .from('chapters')
       .select('id')
-      .eq('subject_id', subjectId)
+      .eq('subject_id', parseInt(subjectId))
     
     const chapterIds = chapters?.map(c => c.id) || []
     

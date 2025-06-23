@@ -12,6 +12,7 @@ export default function AdminDashboard() {
   const [subjects, setSubjects] = useState([])
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [editingUser, setEditingUser] = useState(null)
   
   const [newUser, setNewUser] = useState({
     rollNumber: '',
@@ -33,7 +34,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (selectedClass && activeTab !== 'create-user') {
       if (activeTab === 'students') {
-        fetchStudents(selectedClass.name)
+        fetchStudents(selectedClass.id) // Changed to use ID instead of name
       } else {
         fetchTeachers()
       }
@@ -70,10 +71,10 @@ export default function AdminDashboard() {
     }
   }
   
-  const fetchStudents = async (className) => {
+  const fetchStudents = async (classId) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/students/${encodeURIComponent(className)}`)
+      const res = await fetch(`/api/admin/students/${classId}`)
       const data = await res.json()
       setStudents(data.students || [])
     } catch (error) {
@@ -167,6 +168,87 @@ export default function AdminDashboard() {
       alert('Error creating user: ' + error.message)
     } finally {
       setCreating(false)
+    }
+  }
+  
+  const handleEditUser = (user) => {
+    setEditingUser({
+      ...user,
+      newPassword: ''
+    })
+  }
+  
+  const handleSaveUser = async () => {
+    try {
+      const res = await fetch('/api/admin/update-user', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingUser)
+      })
+      
+      const data = await res.json()
+      
+      if (res.ok) {
+        alert('User updated successfully!')
+        setEditingUser(null)
+        if (activeTab === 'students') {
+          fetchStudents(selectedClass.id)
+        } else {
+          fetchTeachers()
+        }
+      } else {
+        alert(data.error || 'Failed to update user')
+      }
+    } catch (error) {
+      alert('Error updating user: ' + error.message)
+    }
+  }
+  
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('Are you sure you want to delete this user?')) return
+    
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      })
+      
+      const data = await res.json()
+      
+      if (res.ok) {
+        alert('User deleted successfully!')
+        if (activeTab === 'students') {
+          fetchStudents(selectedClass.id)
+        } else {
+          fetchTeachers()
+        }
+      } else {
+        alert(data.error || 'Failed to delete user')
+      }
+    } catch (error) {
+      alert('Error deleting user: ' + error.message)
+    }
+  }
+  
+  const handleAssignSubject = async (teacherId, subjectId, action) => {
+    try {
+      const res = await fetch('/api/admin/assign-subject', {
+        method: action === 'assign' ? 'POST' : 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherId, subjectId })
+      })
+      
+      const data = await res.json()
+      
+      if (res.ok) {
+        alert(`Subject ${action === 'assign' ? 'assigned' : 'unassigned'} successfully!`)
+        fetchTeachers()
+      } else {
+        alert(data.error || `Failed to ${action} subject`)
+      }
+    } catch (error) {
+      alert(`Error ${action}ing subject: ` + error.message)
     }
   }
   
@@ -311,7 +393,7 @@ export default function AdminDashboard() {
                     >
                       <option value="">Select Class</option>
                       {classes.map(cls => (
-                        <option key={cls.id} value={cls.name}>{cls.name}</option>
+                        <option key={cls.id} value={cls.id}>{cls.name}</option>
                       ))}
                     </select>
                     {errors.class && (
@@ -435,6 +517,7 @@ export default function AdminDashboard() {
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Full Name</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Class</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created At</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -451,6 +534,20 @@ export default function AdminDashboard() {
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                               {new Date(student.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                onClick={() => handleEditUser(student)}
+                                className="text-blue-600 hover:text-blue-900 mr-3"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(student.id)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                Delete
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -479,6 +576,7 @@ export default function AdminDashboard() {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Full Name</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned Subjects</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created At</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -497,13 +595,51 @@ export default function AdminDashboard() {
                                 key={subject.id}
                                 className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1"
                               >
-                                {subject.name} ({subject.class_name})
+                                {subject.name} (Class {subject.class_id})
+                                <button
+                                  onClick={() => handleAssignSubject(teacher.id, subject.id, 'unassign')}
+                                  className="ml-1 text-red-600 hover:text-red-800"
+                                >
+                                  ×
+                                </button>
                               </span>
                             ))}
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleAssignSubject(teacher.id, e.target.value, 'assign')
+                                  e.target.value = ''
+                                }
+                              }}
+                              className="text-xs border rounded px-2 py-1"
+                            >
+                              <option value="">+ Assign Subject</option>
+                              {subjects
+                                .filter(subject => !teacher.assigned_subjects?.find(as => as.id === subject.id))
+                                .map(subject => (
+                                  <option key={subject.id} value={subject.id}>
+                                    {subject.name} (Class {subject.class_id})
+                                  </option>
+                                ))}
+                            </select>
                           </div>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(teacher.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleEditUser(teacher)}
+                            className="text-blue-600 hover:text-blue-900 mr-3"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(teacher.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -511,6 +647,79 @@ export default function AdminDashboard() {
                 </table>
               </div>
             )}
+          </div>
+        )}
+        
+        {/* Edit User Modal */}
+        {editingUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-bold mb-4">Edit User</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Roll Number</label>
+                  <input
+                    type="text"
+                    value={editingUser.roll_number}
+                    onChange={(e) => setEditingUser({...editingUser, roll_number: e.target.value})}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">Full Name</label>
+                  <input
+                    type="text"
+                    value={editingUser.full_name}
+                    onChange={(e) => setEditingUser({...editingUser, full_name: e.target.value})}
+                    className="w-full p-2 border rounded"
+                  />
+                </div>
+                
+                {editingUser.role === 'student' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Class</label>
+                    <select
+                      value={editingUser.class || ''}
+                      onChange={(e) => setEditingUser({...editingUser, class: e.target.value})}
+                      className="w-full p-2 border rounded"
+                    >
+                      <option value="">Select Class</option>
+                      {classes.map(cls => (
+                        <option key={cls.id} value={cls.id}>{cls.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
+                <div>
+                  <label className="block text-sm font-medium mb-2">New Password (leave blank to keep current)</label>
+                  <input
+                    type="password"
+                    value={editingUser.newPassword || ''}
+                    onChange={(e) => setEditingUser({...editingUser, newPassword: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    placeholder="Enter new password"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleSaveUser}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setEditingUser(null)}
+                  className="flex-1 bg-gray-500 text-white py-2 rounded hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>
