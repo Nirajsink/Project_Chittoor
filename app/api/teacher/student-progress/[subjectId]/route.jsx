@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
       .from('teacher_assignments')
       .select('id')
       .eq('teacher_id', session.userId)
-      .eq('subject_id', subjectId)
+      .eq('subject_id', parseInt(subjectId))
       .single()
     
     if (!assignment) {
@@ -29,9 +29,10 @@ export async function GET(request, { params }) {
       .select(`
         id,
         name,
+        class_id,
         classes(id, name)
       `)
-      .eq('id', subjectId)
+      .eq('id', parseInt(subjectId))
       .single()
     
     if (!subject) {
@@ -43,13 +44,14 @@ export async function GET(request, { params }) {
       .from('auth_users')
       .select('id, roll_number, full_name, class')
       .eq('role', 'student')
-      .eq('class', subject.classes.name)
+      .eq('class', subject.class_id)
       .order('roll_number')
     
     if (!students || students.length === 0) {
       return NextResponse.json({ 
         progressData: [], 
-        classInfo: subject.classes 
+        classInfo: subject.classes,
+        subjectInfo: subject
       })
     }
     
@@ -57,7 +59,7 @@ export async function GET(request, { params }) {
     const { data: chapters } = await supabase
       .from('chapters')
       .select('id')
-      .eq('subject_id', subjectId)
+      .eq('subject_id', parseInt(subjectId))
     
     const chapterIds = chapters?.map(c => c.id) || []
     
@@ -147,7 +149,8 @@ export async function GET(request, { params }) {
     
     return NextResponse.json({
       progressData,
-      classInfo: subject.classes
+      classInfo: subject.classes,
+      subjectInfo: subject
     })
     
   } catch (error) {

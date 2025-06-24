@@ -13,10 +13,7 @@ export async function POST(request) {
     const { quizId, answers } = await request.json()
     
     if (!quizId || !answers) {
-      return NextResponse.json(
-        { error: 'Missing quiz ID or answers' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Missing quiz ID or answers' }, { status: 400 })
     }
     
     // Check if student has already attempted this quiz
@@ -28,10 +25,7 @@ export async function POST(request) {
       .single()
     
     if (existingAttempt) {
-      return NextResponse.json(
-        { error: 'Quiz already attempted' },
-        { status: 409 }
-      )
+      return NextResponse.json({ error: 'Quiz already attempted' }, { status: 400 })
     }
     
     // Get quiz questions with correct answers
@@ -40,7 +34,9 @@ export async function POST(request) {
       .select('id, correct_answer, marks')
       .eq('quiz_id', quizId)
     
-    if (questionsError) throw questionsError
+    if (questionsError || !questions) {
+      return NextResponse.json({ error: 'Failed to fetch quiz questions' }, { status: 500 })
+    }
     
     // Calculate score
     let score = 0
@@ -49,14 +45,13 @@ export async function POST(request) {
     questions.forEach(question => {
       totalMarks += question.marks
       const studentAnswer = answers[question.id]
-      
-      if (studentAnswer !== undefined && studentAnswer === question.correct_answer) {
+      if (studentAnswer === question.correct_answer) {
         score += question.marks
       }
     })
     
-    // Save attempt
-    const { data: attempt, error: attemptError } = await supabase
+    // Save student attempt
+    const { error: attemptError } = await supabase
       .from('student_attempts')
       .insert([{
         student_id: session.userId,
@@ -65,23 +60,24 @@ export async function POST(request) {
         total_marks: totalMarks,
         answers
       }])
-      .select()
-      .single()
     
-    if (attemptError) throw attemptError
+    if (attemptError) {
+      console.error('Failed to save attempt:', attemptError)
+      return NextResponse.json({ error: 'Failed to save quiz attempt' }, { status: 500 })
+    }
+    
+    const percentage = Math.round((score / totalMarks) * 100)
     
     return NextResponse.json({
-      message: 'Quiz submitted successfully',
       score,
       totalMarks,
-      percentage: Math.round((score / totalMarks) * 100)
+      percentage,
+      passed: percentage >= 60,
+      message: percentage >= 60 ? 'Congratulations! You passed!' : 'Keep studying and try again!'
     })
     
   } catch (error) {
     console.error('Quiz submission error:', error)
-    return NextResponse.json(
-      { error: 'Failed to submit quiz' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

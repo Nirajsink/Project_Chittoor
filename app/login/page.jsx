@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -7,7 +7,30 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({ rollNumber: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [darkMode, setDarkMode] = useState(false)
   const router = useRouter()
+  
+  // Initialize dark mode
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme')
+    
+    if (savedTheme === 'dark') {
+      setDarkMode(true)
+      document.documentElement.setAttribute('data-theme', 'dark')
+    } else {
+      setDarkMode(false)
+      document.documentElement.setAttribute('data-theme', 'light')
+    }
+  }, [])
+  
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode
+    const newTheme = newDarkMode ? 'dark' : 'light'
+    
+    setDarkMode(newDarkMode)
+    document.documentElement.setAttribute('data-theme', newTheme)
+    localStorage.setItem('theme', newTheme)
+  }
   
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -27,12 +50,9 @@ export default function LoginPage() {
         console.log('Login successful, user role:', data.user.role)
         console.log('Redirecting to:', `/${data.user.role}-dashboard`)
         
-        // Multiple redirect strategies for better reliability
         try {
-          // Method 1: Next.js router push
           await router.push(`/${data.user.role}-dashboard`)
           
-          // Method 2: Fallback with window.location (after a small delay)
           setTimeout(() => {
             if (window.location.pathname === '/login') {
               console.log('Router push failed, using window.location')
@@ -42,7 +62,6 @@ export default function LoginPage() {
           
         } catch (routerError) {
           console.error('Router push failed:', routerError)
-          // Method 3: Direct window.location as backup
           window.location.href = `/${data.user.role}-dashboard`
         }
         
@@ -60,7 +79,6 @@ export default function LoginPage() {
   const quickLogin = async (rollNumber, password) => {
     setFormData({ rollNumber, password })
     
-    // Auto-submit after setting form data
     setTimeout(async () => {
       setLoading(true)
       setError('')
@@ -76,10 +94,7 @@ export default function LoginPage() {
         
         if (response.ok) {
           console.log('Quick login successful, redirecting to:', `/${data.user.role}-dashboard`)
-          
-          // Force redirect for quick login
           window.location.href = `/${data.user.role}-dashboard`
-          
         } else {
           setError(data.error)
         }
@@ -93,97 +108,130 @@ export default function LoginPage() {
   }
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">School LMS</h2>
-          <p className="mt-2 text-gray-600">Sign in with your roll number</p>
-        </div>
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Roll Number
-            </label>
-            <input
-              type="text"
-              required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={formData.rollNumber}
-              onChange={(e) => setFormData({...formData, rollNumber: e.target.value})}
-              placeholder="Enter your roll number"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              type="password"
-              required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
-              placeholder="Enter your password"
-            />
-          </div>
-          
+    <div className="min-h-screen flex items-center justify-center bg-secondary">
+      <div className="max-w-md w-full mx-4">
+        {/* Dark Mode Toggle */}
+        <div className="flex justify-end mb-4">
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            onClick={toggleDarkMode}
+            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            style={{
+              backgroundColor: darkMode ? '#3b82f6' : '#d1d5db'
+            }}
+            aria-label={`Switch to ${darkMode ? 'light' : 'dark'} mode`}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            <span
+              className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm"
+              style={{
+                transform: darkMode ? 'translateX(24px)' : 'translateX(4px)'
+              }}
+            />
+            <span className="absolute left-1 text-xs">
+              {darkMode ? '🌙' : '☀️'}
+            </span>
           </button>
-        </form>
-        
-        {/* Quick Login Buttons */}
-        <div className="border-t pt-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Login (Test Users):</h3>
-          <div className="space-y-2">
-            <button
-              onClick={() => quickLogin('STU001', 'password123')}
-              disabled={loading}
-              className="w-full text-left px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-50"
-            >
-              👨‍🎓 Student: STU001 / password123
-            </button>
-            <button
-              onClick={() => quickLogin('TEA001', 'password123')}
-              disabled={loading}
-              className="w-full text-left px-3 py-2 text-sm bg-green-50 text-green-700 rounded hover:bg-green-100 disabled:opacity-50"
-            >
-              👩‍🏫 Teacher: TEA001 / password123
-            </button>
-            <button
-              onClick={() => quickLogin('ADM001', 'password123')}
-              disabled={loading}
-              className="w-full text-left px-3 py-2 text-sm bg-red-50 text-red-700 rounded hover:bg-red-100 disabled:opacity-50"
-            >
-              👨‍💼 Admin: ADM001 / password123
-            </button>
-          </div>
         </div>
         
-        <div className="text-center">
-          <Link href="/" className="text-sm text-gray-600 hover:text-gray-800">
-            ← Back to Home
-          </Link>
-        </div>
-        
-        {loading && (
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <p className="text-sm text-gray-600 mt-2">Signing in...</p>
+        <div className="bg-primary rounded-lg shadow-lg p-8">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-primary mb-2">School LMS</h2>
+            <p className="text-secondary">Sign in with your roll number</p>
           </div>
-        )}
+          
+          {error && (
+            <div 
+              className="p-3 rounded-md mb-4"
+              style={{ backgroundColor: 'var(--red-50)', color: 'var(--red-600)' }}
+            >
+              {error}
+            </div>
+          )}
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-primary">
+                Roll Number
+              </label>
+              <input
+                type="text"
+                required
+                className="mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-primary text-primary"
+                style={{ borderColor: 'var(--border-color)' }}
+                value={formData.rollNumber}
+                onChange={(e) => setFormData({...formData, rollNumber: e.target.value})}
+                placeholder="Enter your roll number"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-primary">
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                className="mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-primary text-primary"
+                style={{ borderColor: 'var(--border-color)' }}
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                placeholder="Enter your password"
+              />
+            </div>
+            
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: 'var(--blue-600)' }}
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+          
+          {/* Quick Login Buttons */}
+          <div className="border-t pt-6 mt-6" style={{ borderColor: 'var(--border-color)' }}>
+            <h3 className="text-sm font-medium text-primary mb-3">Quick Login (Test Users):</h3>
+            <div className="space-y-2">
+              <button
+                onClick={() => quickLogin('STU010', 'password123')}
+                disabled={loading}
+                className="w-full text-left px-3 py-2 text-sm rounded transition-colors hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--blue-50)', color: 'var(--blue-700)' }}
+              >
+                👨‍🎓 Student: STU010 / password123
+              </button>
+              <button
+                onClick={() => quickLogin('TEA001', 'password123')}
+                disabled={loading}
+                className="w-full text-left px-3 py-2 text-sm rounded transition-colors hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--green-50)', color: 'var(--green-700)' }}
+              >
+                👩‍🏫 Teacher: TEA001 / password123
+              </button>
+              <button
+                onClick={() => quickLogin('ADM001', 'password123')}
+                disabled={loading}
+                className="w-full text-left px-3 py-2 text-sm rounded transition-colors hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: 'var(--red-50)', color: 'var(--red-700)' }}
+              >
+                👨‍💼 Admin: ADM001 / password123
+              </button>
+            </div>
+          </div>
+          
+          <div className="text-center mt-6">
+            <Link href="/" className="text-sm text-secondary hover:opacity-80">
+              ← Back to Home
+            </Link>
+          </div>
+          
+          {loading && (
+            <div className="text-center mt-4">
+              <div className="loading-spinner h-6 w-6 mx-auto mb-2"></div>
+              <p className="text-sm text-secondary">Signing in...</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

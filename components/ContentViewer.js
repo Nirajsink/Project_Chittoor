@@ -1,137 +1,119 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { getFileUrl } from '@/lib/storage'
+import { useState } from 'react'
 
-export default function ContentViewer({ chapterId }) {
-  const [contents, setContents] = useState([])
+export default function ContentViewer({ content, onClose }) {
   const [loading, setLoading] = useState(true)
+  const [embedError, setEmbedError] = useState(false)
   
-  const fetchContent = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/content/chapter/${chapterId}`)
-      const data = await response.json()
-      setContents(data.contents || [])
-    } catch (error) {
-      console.error('Error fetching content:', error)
-    } finally {
-      setLoading(false)
+  const getEmbedUrl = (url, type) => {
+    if (type === 'pdf' || type === 'textbook') {
+      if (url.includes('drive.google.com')) {
+        const fileId = url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1]
+        if (fileId) {
+          return `https://drive.google.com/file/d/${fileId}/preview`
+        }
+      }
+      return url
+    } else if (type === 'ppt' || type === 'presentation') {
+      if (url.includes('docs.google.com/presentation')) {
+        // Google Slides URL
+        const fileId = url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1]
+        if (fileId) {
+          // Convert to proper embed URL
+          return `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`
+        }
+      } else if (url.includes('drive.google.com')) {
+        // PPT files
+        const fileId = url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1]
+        if (fileId) {
+          return `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`
+        }
+      }
+      // PPT files
+      return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
     }
-  }, [chapterId])
-  
-  useEffect(() => {
-    fetchContent()
-  }, [fetchContent])
-  
-  const renderContent = (content) => {
-    const isExternalLink = content.file_url.startsWith('http')
-    
-    switch (content.type) {
-      case 'pdf':
-        if (isExternalLink) {
-          return (
-            <a
-              href={content.file_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800"
-            >
-              📄 View PDF
-            </a>
-          )
-        } else {
-          const pdfUrl = getFileUrl('course-materials', content.file_url)
-          return (
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800"
-            >
-              📄 View PDF
-            </a>
-          )
-        }
-      
-      case 'video':
-        if (isExternalLink) {
-          return (
-            <a
-              href={content.file_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-red-600 hover:text-red-800"
-            >
-              🎥 Watch Video
-            </a>
-          )
-        } else {
-          const videoUrl = getFileUrl('course-materials', content.file_url)
-          return (
-            <video controls className="w-full max-w-md">
-              <source src={videoUrl} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          )
-        }
-      
-      case 'note':
-        if (isExternalLink) {
-          return (
-            <a
-              href={content.file_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-green-600 hover:text-green-800"
-            >
-              📝 View Notes
-            </a>
-          )
-        } else {
-          const noteUrl = getFileUrl('course-materials', content.file_url)
-          return (
-            <a
-              href={noteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-green-600 hover:text-green-800"
-            >
-              📝 View Notes
-            </a>
-          )
-        }
-      
-      default:
-        return <span className="text-gray-500">Unknown content type</span>
-    }
+    return url
   }
   
-  if (loading) {
-    return <div className="text-center py-4">Loading content...</div>
-  }
+  const embedUrl = getEmbedUrl(content.file_url, content.content_type)
   
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-bold">Chapter Materials</h3>
-      
-      {contents.length === 0 ? (
-        <p className="text-gray-500">No content available for this chapter.</p>
-      ) : (
-        <div className="space-y-3">
-          {contents.map(content => (
-            <div key={content.id} className="bg-gray-50 p-4 rounded-md">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-medium">{content.title}</h4>
-                  <p className="text-sm text-gray-600 capitalize">{content.type}</p>
-                </div>
-                <div>
-                  {renderContent(content)}
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg w-full h-full max-w-6xl max-h-[90vh] m-4 flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b">
+          <div>
+            <h3 className="text-lg font-semibold">{content.content_title}</h3>
+            <p className="text-sm text-gray-600">{content.content_type?.toUpperCase()}</p>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href={content.file_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+            >
+              Open in Slides
+            </a>
+            <button
+              onClick={onClose}
+              className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        
+        {/* Content Viewer */}
+        <div className="flex-1 relative">
+          {loading && !embedError && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <span className="ml-3">Loading presentation...</span>
+            </div>
+          )}
+          
+          {embedError ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center p-8">
+                <div className="text-6xl mb-4">📊</div>
+                <h3 className="text-lg font-semibold mb-2">Unable to Load Presentation</h3>
+                <p className="text-gray-600 mb-4">
+                  The presentation cannot be embedded. This might be due to browser restrictions or file settings.
+                </p>
+                <div className="space-y-2">
+                  <a
+                    href={content.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  >
+                    Open in Google Slides
+                  </a>
+                  <a
+                    href={embedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                  >
+                    Try Direct Embed Link
+                  </a>
                 </div>
               </div>
             </div>
-          ))}
+          ) : (
+            <iframe
+              src={embedUrl}
+              className="w-full h-full border-0"
+              onLoad={() => setLoading(false)}
+              onError={() => setEmbedError(true)}
+              title={content.content_title}
+              allow="autoplay"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+            />
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

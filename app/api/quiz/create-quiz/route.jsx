@@ -10,18 +10,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    const { chapterId, title, type, timeLimit, questions } = await request.json()
+    const { title, chapterId, timeLimit, questions } = await request.json()
     
-    if (!chapterId || !title || !type || !questions || questions.length === 0) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-    
-    // Validate quiz type
-    if (!['chapter', 'annual'].includes(type)) {
-      return NextResponse.json({ error: 'Invalid quiz type' }, { status: 400 })
+    if (!title || !chapterId || !questions || questions.length === 0) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
     
     // Verify teacher has access to this chapter
@@ -30,7 +22,6 @@ export async function POST(request) {
       .select(`
         id,
         subjects!inner(
-          id,
           teacher_assignments!inner(teacher_id)
         )
       `)
@@ -39,10 +30,7 @@ export async function POST(request) {
       .single()
     
     if (!chapter) {
-      return NextResponse.json(
-        { error: 'Chapter not found or access denied' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
     
     // Create quiz
@@ -51,14 +39,17 @@ export async function POST(request) {
       .insert([{
         chapter_id: chapterId,
         title,
-        type,
+        type: 'chapter',
         total_questions: questions.length,
         time_limit: timeLimit || 30
       }])
       .select()
       .single()
     
-    if (quizError) throw quizError
+    if (quizError) {
+      console.error('Quiz creation error:', quizError)
+      return NextResponse.json({ error: 'Failed to create quiz' }, { status: 500 })
+    }
     
     // Create questions
     const questionsData = questions.map(q => ({
@@ -73,7 +64,25 @@ export async function POST(request) {
       .from('questions')
       .insert(questionsData)
     
-    if (questionsError) throw questionsError
+    if (questionsError) {
+      console.error('Questions creation error:', questionsError)
+      return NextResponse.json({ error: 'Failed to create questions' }, { status: 500 })
+    }
+    
+    // Create content entry for quiz to appear in student view
+    const { error: contentError } = await supabase
+      .from('content')
+      .insert([{
+        chapter_id: chapterId,
+        title,
+        type: 'quiz',
+        file_url: `/quiz/${quiz.id}`,
+        content_text: `Quiz with ${questions.length} questions`
+      }])
+    
+    if (contentError) {
+      console.error('Content creation error:', contentError)
+    }
     
     return NextResponse.json({
       message: 'Quiz created successfully',
@@ -82,9 +91,6 @@ export async function POST(request) {
     
   } catch (error) {
     console.error('Quiz creation error:', error)
-    return NextResponse.json(
-      { error: 'Failed to create quiz' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
