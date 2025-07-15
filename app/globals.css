@@ -38,17 +38,8 @@
   --gray-900: #111827;
 }
 
-/* REMOVE THIS SECTION - It's causing the conflict */
-/* @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    // ... other dark mode variables
-  }
-} */
-
-/* Manual dark mode toggle - This should be the ONLY dark mode trigger */
-[data-theme="dark"] {
+/* Dark mode: uses .dark class on <html> (as set by next-themes/ShadCN) */
+.dark {
   --background: #0a0a0a;
   --foreground: #ededed;
   --bg-primary: #111827;
@@ -167,35 +158,6 @@ body {
     flex-direction: row;
     justify-content: space-between;
   }
-}
-
-/* Dark mode toggle styles */
-.dark-mode-toggle {
-  position: relative;
-  display: inline-flex;
-  height: 24px;
-  width: 44px;
-  align-items: center;
-  border-radius: 9999px;
-  transition: background-color 0.3s ease;
-  cursor: pointer;
-  border: none;
-  outline: none;
-}
-
-.dark-mode-toggle:focus {
-  outline: 2px solid var(--blue-600);
-  outline-offset: 2px;
-}
-
-.dark-mode-toggle-thumb {
-  display: inline-block;
-  height: 16px;
-  width: 16px;
-  border-radius: 50%;
-  background-color: white;
-  transition: transform 0.3s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Loading spinner */

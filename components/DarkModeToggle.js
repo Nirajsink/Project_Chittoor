@@ -1,26 +1,42 @@
 'use client'
-import { useTheme } from '@/contexts/ThemeContext'
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { Sun, Moon } from 'lucide-react'
 
 export default function DarkModeToggle() {
-  const { theme, toggleTheme } = useTheme()
+  const [darkMode, setDarkMode] = useState(false)
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme')
+    if (savedTheme === 'dark') {
+      setDarkMode(true)
+      document.documentElement.setAttribute('data-theme', 'dark')
+    } else {
+      setDarkMode(false)
+      document.documentElement.setAttribute('data-theme', 'light')
+    }
+  }, [])
+
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode
+    const newTheme = newDarkMode ? 'dark' : 'light'
+    setDarkMode(newDarkMode)
+    document.documentElement.setAttribute('data-theme', newTheme)
+    localStorage.setItem('theme', newTheme)
+  }
 
   return (
-    <button
-      onClick={toggleTheme}
-      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-      style={{
-        backgroundColor: theme === 'dark' ? 'var(--blue-600)' : 'var(--border-color)'
-      }}
+    <motion.button
+      onClick={toggleDarkMode}
+      className="p-3 rounded-full glass hover:scale-110 transition-all duration-300"
+      whileHover={{ rotate: 180 }}
+      whileTap={{ scale: 0.9 }}
       aria-label="Toggle dark mode"
     >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          theme === 'dark' ? 'translate-x-6' : 'translate-x-1'
-        }`}
-      />
-      <span className="sr-only">
-        {theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      </span>
-    </button>
+      {darkMode ? 
+        <Sun className="w-5 h-5 text-yellow-500" /> : 
+        <Moon className="w-5 h-5 text-blue-600" />
+      }
+    </motion.button>
   )
 }

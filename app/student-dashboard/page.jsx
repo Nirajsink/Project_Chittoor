@@ -1,497 +1,345 @@
 'use client'
+
 import { useState, useEffect } from 'react'
-import ContentViewer from '@/components/ContentViewer'
-import QuizPlayer from '@/components/QuizPlayer'
+import { motion } from 'framer-motion'
+import dynamic from 'next/dynamic'
+import Link from 'next/link'
+
+// Lucide Icons
+import { Sun, Moon, Bell, Search, LogOut, BookOpen, Trophy, Clock, TrendingUp } from 'lucide-react'
+
+// Lazy-loaded Components (disable SSR)
+const ContentViewer = dynamic(() => import('@/components/ContentViewer'), { ssr: false });
+const QuizPlayer = dynamic(() => import('@/components/QuizPlayer'), { ssr: false });
+const StatsCards = dynamic(() => import('@/components/dashboard/StatsCards'), { ssr: false });
+const SubjectsSection = dynamic(() => import('@/components/dashboard/SubjectsSection'), { ssr: false });
+const RecentActivities = dynamic(() => import('@/components/dashboard/RecentActivities'), { ssr: false });
+const UpcomingQuizzes = dynamic(() => import('@/components/dashboard/UpcomingQuizzes'), { ssr: false });
+const QuickActions = dynamic(() => import('@/components/dashboard/QuickActions'), { ssr: false });
+
+import { Button } from "@/components/ui/button"
 
 export default function StudentDashboard() {
-  // User and authentication state
-  const [user, setUser] = useState(null)
-  
-  // Content and subject data
-  const [contentData, setContentData] = useState([])
-  const [subjects, setSubjects] = useState([])
-  const [selectedSubject, setSelectedSubject] = useState(null)
-  const [subjectContent, setSubjectContent] = useState({})
-  
-  // UI state
-  const [activeSection, setActiveSection] = useState('textbook')
-  const [loading, setLoading] = useState(true)
-  const [viewingContent, setViewingContent] = useState(null)
-  const [darkMode, setDarkMode] = useState(false)
-  
-  // Quiz state
-  const [takingQuiz, setTakingQuiz] = useState(null)
-  const [quizResults, setQuizResults] = useState(null)
-  
-  // Initialize dashboard when component loads
+  // --- Backend-driven State ---
+  const [user, setUser] = useState(null);
+  const [contentData, setContentData] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [subjectContent, setSubjectContent] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  // --- UI/Modal Specific State ---
+  const [viewingContent, setViewingContent] = useState(null);
+  const [takingQuiz, setTakingQuiz] = useState(null);
+  const [quizResults, setQuizResults] = useState(null);
+
+  // --- Dashboard State ---
+  const [openSubject, setOpenSubject] = useState(null);
+  const [activeType, setActiveType] = useState('textbook');
+
+  // --- Theme & Search ---
+  const [darkMode, setDarkMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // --- Effects for Data Loading and Theme Initialization ---
   useEffect(() => {
-    loadCurrentUser()
-    initializeDarkMode()
-  }, [])
-  
-  // Load content when user is authenticated
+    loadCurrentUser();
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+      setDarkMode(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      setDarkMode(false);
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }, []);
+
   useEffect(() => {
     if (user?.rollNumber) {
-      loadStudentContent()
+      loadStudentContent();
     }
-  }, [user])
-  
-  // Organize content when data is loaded
+  }, [user]);
+
   useEffect(() => {
     if (contentData.length > 0) {
-      organizeContentBySubjects()
+      organizeContentBySubjects();
     }
-  }, [contentData])
-  
-  // Initialize dark mode from localStorage or system preference
-  const initializeDarkMode = () => {
-    const savedTheme = localStorage.getItem('theme')
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    
-    if (savedTheme) {
-      setDarkMode(savedTheme === 'dark')
-      document.documentElement.setAttribute('data-theme', savedTheme)
-    } else if (prefersDark) {
-      setDarkMode(true)
-      document.documentElement.setAttribute('data-theme', 'dark')
-    }
-  }
-  
-  // Toggle dark mode
-  const toggleDarkMode = () => {
-    const newTheme = !darkMode ? 'dark' : 'light'
-    setDarkMode(!darkMode)
-    document.documentElement.setAttribute('data-theme', newTheme)
-    localStorage.setItem('theme', newTheme)
-  }
-  
-  // Get current authenticated user
+  }, [contentData]);
+
+  // --- Backend Interaction Functions ---
   const loadCurrentUser = async () => {
     try {
-      const response = await fetch('/api/auth/me')
-      const data = await response.json()
-      setUser(data.user)
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      setUser(data.user);
     } catch (error) {
-      console.error('Failed to load user:', error)
+      console.error('Failed to load user:', error);
     }
-  }
-  
-  // Load all content for the student using the view
+  };
+
   const loadStudentContent = async () => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const response = await fetch('/api/student/content-view')
-      const data = await response.json()
-      setContentData(data.content || [])
+      const response = await fetch('/api/student/content-view');
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      setContentData(data.content || []);
     } catch (error) {
-      console.error('Failed to load content:', error)
+      console.error('Failed to load student content:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-  
-  // Organize content by subjects and chapters
+  };
+
   const organizeContentBySubjects = () => {
-    const subjectMap = {}
-    const subjectsList = []
-    
+    const subjectMap = {};
+    const subjectsList = [];
     contentData.forEach(item => {
-      const subjectName = item.subject_name
-      
+      const subjectName = item.subject_name;
       if (!subjectMap[subjectName]) {
-        subjectMap[subjectName] = {
-          name: subjectName,
-          chapters: {}
-        }
-        subjectsList.push(subjectMap[subjectName])
+        subjectMap[subjectName] = { name: subjectName, chapters: {} };
+        subjectsList.push(subjectMap[subjectName]);
       }
-      
-      const chapterName = item.chapter_name
-      
+      const chapterName = item.chapter_name;
       if (!subjectMap[subjectName].chapters[chapterName]) {
         subjectMap[subjectName].chapters[chapterName] = {
-          name: chapterName,
-          textbook: [],
-          ppt: [],
-          quiz: []
-        }
+          name: chapterName, textbook: [], ppt: [], quiz: []
+        };
       }
-      
-      // Categorize content by type
       if (item.content_type === 'pdf' || item.content_type === 'textbook') {
-        subjectMap[subjectName].chapters[chapterName].textbook.push(item)
+        subjectMap[subjectName].chapters[chapterName].textbook.push(item);
       } else if (item.content_type === 'ppt' || item.content_type === 'presentation') {
-        subjectMap[subjectName].chapters[chapterName].ppt.push(item)
+        subjectMap[subjectName].chapters[chapterName].ppt.push(item);
       } else if (item.content_type === 'quiz') {
-        subjectMap[subjectName].chapters[chapterName].quiz.push(item)
+        subjectMap[subjectName].chapters[chapterName].quiz.push(item);
       }
-    })
-    
-    setSubjects(subjectsList)
-    setSubjectContent(subjectMap)
-    
-    if (subjectsList.length > 0 && !selectedSubject) {
-      setSelectedSubject(subjectsList[0])
-    }
-  }
-  
-  // Track content analytics when student views content
-  const trackContentView = async (content) => {
-    try {
-      const contentId = content.content_id || content.id || content.chapter_id
-      
-      if (!contentId) {
-        console.warn('No content ID found for analytics tracking:', content)
-        return
-      }
-      
-      const response = await fetch('/api/content/analytics/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contentId: contentId,
-          timeSpent: 30
-        })
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error('Analytics tracking failed:', errorData)
-      }
-    } catch (error) {
-      console.error('Failed to track content view:', error)
-    }
-  }
-  
-  // Handle viewing content in embedded viewer
-  const handleViewContent = (content) => {
-    setViewingContent(content)
-    trackContentView(content)
-  }
-  
-  // Handle starting a quiz
-  const handleStartQuiz = (content) => {
-    const quizId = content.file_url.split('/').pop()
-    setTakingQuiz(quizId)
-    trackContentView(content)
-  }
-  
-  // Handle quiz completion
+    });
+    setSubjects(subjectsList);
+    setSubjectContent(subjectMap);
+  };
+
+  // --- UI Interaction Handlers ---
+  const handleViewContent = (content) => setViewingContent(content);
+  const handleStartQuiz = (content) => setTakingQuiz(content.file_url.split('/').pop());
   const handleQuizComplete = (results) => {
-    setTakingQuiz(null)
-    setQuizResults(results)
-  }
-  
-  // Close quiz results and refresh content
+    setTakingQuiz(null);
+    setQuizResults(results);
+  };
   const closeQuizResults = () => {
-    setQuizResults(null)
-    loadStudentContent()
-  }
-  
-  // Close the embedded content viewer
-  const closeContentViewer = () => {
-    setViewingContent(null)
-  }
-  
-  // Get appropriate icon for content type
-  const getContentIcon = (type) => {
-    switch(type) {
-      case 'textbook': return '📚'
-      case 'ppt': return '📊'
-      case 'quiz': return '🧠'
-      default: return '📄'
-    }
-  }
-  
-  // Get theme classes for content type
-  const getContentThemeClasses = (type) => {
-    switch(type) {
-      case 'textbook': return 'bg-blue-theme text-blue-theme'
-      case 'ppt': return 'bg-green-theme text-green-theme'
-      case 'quiz': return 'bg-purple-theme text-purple-theme'
-      default: return 'bg-accent text-primary'
-    }
-  }
-  
-  // Get file URL for external access
-  const getFileUrl = (content) => {
-    if (content.file_url && content.file_url.startsWith('http')) {
-      return content.file_url
-    }
-    return content.file_url || '#'
-  }
-  
-  // Handle user logout
+    setQuizResults(null);
+    loadStudentContent();
+  };
+  const closeContentViewer = () => setViewingContent(null);
+
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
-  
-  // Get chapters for currently selected subject
-  const getCurrentSubjectContent = () => {
-    if (!selectedSubject || !subjectContent[selectedSubject.name]) {
-      return {}
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
-    return subjectContent[selectedSubject.name].chapters
-  }
-  
-  // Count total content for a specific type
-  const getTotalContentCount = (type) => {
-    const chapters = getCurrentSubjectContent()
-    return Object.values(chapters).reduce((total, chapter) => {
-      return total + (chapter[type]?.length || 0)
-    }, 0)
-  }
-  
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-secondary">
-        <div className="text-center">
-          <div className="loading-spinner h-12 w-12 mx-auto mb-4"></div>
-          <p className="text-primary">Loading your subjects...</p>
-        </div>
-      </div>
-    )
-  }
-  
+  };
+
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode;
+    const newTheme = newDarkMode ? 'dark' : 'light';
+    setDarkMode(newDarkMode);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  // --- Derived Data for UI Display ---
+  const sortedContentData = [...contentData].sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
+  const recentActivitiesData = sortedContentData.slice(0, 4).map(item => ({
+    type: item.content_type === 'pdf' || item.content_type === 'textbook' ? 'document' : item.content_type,
+    title: item.content_title,
+    subject: item.subject_name,
+    time: new Date(item.uploaded_at).toLocaleDateString(),
+    originalContent: item
+  }));
+
+  const upcomingQuizzesData = contentData
+    .filter(item => item.content_type === 'quiz')
+    .slice(0, 3)
+    .map(quiz => ({
+      title: quiz.content_title,
+      subject: quiz.subject_name,
+      date: 'N/A',
+      difficulty: 'Medium',
+      quizData: quiz
+    }));
+
+  // Stats Data (placeholders)
+  const totalCourses = subjects.length;
+  const totalAchievements = 12;
+  const totalStudyHours = 47;
+  const averageScore = '87%';
+
+  // --- Framer Motion Variants ---
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1, delayChildren: 0.1 }
+    }
+  };
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.4, ease: "easeOut" }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-secondary">
-      {/* Header */}
-      <header className="bg-primary shadow border-color" style={{ borderBottomWidth: '1px' }}>
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center tablet-responsive">
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Student Dashboard</h1>
-            <p className="text-secondary">Welcome, {user?.fullName} - Class {user?.class}</p>
+      {/* --- Header Section --- */}
+      <motion.header
+        className="bg-primary border-b border-border sticky top-0 z-40"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
+          {/* Logo/Brand */}
+          <Link href="/">
+            <motion.h1
+              className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+              whileHover={{ scale: 1.05 }}
+            >
+              XCELERATOR
+            </motion.h1>
+          </Link>
+
+          {/* Search input hidden on small screens */}
+          <div className="relative flex-grow max-w-xs hidden md:block">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted" />
+            <input
+              type="text"
+              placeholder="Search subjects, topics..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="input pl-10 pr-4 py-2 w-full rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
           </div>
-          <div className="flex items-center gap-4">
-            {/* Dark Mode Toggle */}
-            <button
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-3">
+            <motion.button
+              className="p-2 rounded-lg hover:bg-accent transition-colors w-10 h-10 flex items-center justify-center"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5 text-secondary" />
+            </motion.button>
+            <motion.button
               onClick={toggleDarkMode}
-              className="dark-mode-toggle"
-              style={{
-                backgroundColor: darkMode ? 'var(--blue-600)' : 'var(--gray-300)'
-              }}
-              aria-label="Toggle dark mode"
+              className="p-2 rounded-lg hover:bg-accent transition-colors w-10 h-10 flex items-center justify-center"
+              whileHover={{ rotate: 180 }}
+              whileTap={{ scale: 0.9 }}
+              aria-label="Toggle Dark Mode"
             >
-              <span
-                className="dark-mode-toggle-thumb"
-                style={{
-                  transform: darkMode ? 'translateX(20px)' : 'translateX(4px)'
-                }}
-              />
-            </button>
-            <button 
-              onClick={handleLogout} 
-              className="px-4 py-2 rounded transition-opacity hover:opacity-90"
-              style={{ 
-                backgroundColor: 'var(--red-600)', 
-                color: 'white' 
-              }}
+              {darkMode ? (
+                <Sun className="w-5 h-5 text-yellow-500" />
+              ) : (
+                <Moon className="w-5 h-5 text-blue-600" />
+              )}
+            </motion.button>
+            <motion.div className="flex items-center gap-3" whileHover={{ scale: 1.05 }}>
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                {user?.name ? user.name[0]?.toUpperCase() : 'U'}
+              </div>
+              <div className="hidden sm:block text-right">
+                <div className="text-sm font-medium text-primary">{user?.name || 'Loading User...'}</div>
+                <div className="text-xs text-secondary">Student ID: {user?.rollNumber || 'N/A'}</div>
+              </div>
+            </motion.div>
+            <motion.button
+              onClick={handleLogout}
+              className="p-2 rounded-lg hover:bg-accent transition-colors text-red-500 w-10 h-10 flex items-center justify-center"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              aria-label="Logout"
             >
-              Logout
-            </button>
+              <LogOut className="w-5 h-5" />
+            </motion.button>
           </div>
         </div>
-      </header>
-      
-      <main className="max-w-7xl mx-auto p-6 tablet-responsive">
-        {/* Subject Selection */}
-        <div className="bg-primary rounded-lg shadow p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 text-primary">My Subjects</h2>
-          
-          {subjects.length === 0 ? (
-            <div className="text-center py-8 text-muted">
-              <span className="text-4xl mb-4 block">📚</span>
-              <h3 className="text-lg font-medium mb-2">No Subjects Available</h3>
-              <p className="text-sm">Your subjects haven't been set up yet. Contact your teacher or admin.</p>
-            </div>
-          ) : (
-            <div className="tablet-grid">
-              {subjects.map((subject, index) => {
-                const chapterCount = Object.keys(subjectContent[subject.name]?.chapters || {}).length
-                const totalContent = Object.values(subjectContent[subject.name]?.chapters || {}).reduce((total, chapter) => {
-                  return total + (chapter.textbook?.length || 0) + (chapter.ppt?.length || 0) + (chapter.quiz?.length || 0)
-                }, 0)
-                
-                return (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedSubject(subject)}
-                    className="p-4 rounded-lg border-2 transition-all text-left content-card"
-                    style={{
-                      borderColor: selectedSubject?.name === subject.name ? 'var(--blue-600)' : 'var(--border-color)',
-                      backgroundColor: selectedSubject?.name === subject.name ? 'var(--blue-50)' : 'var(--bg-primary)',
-                      boxShadow: selectedSubject?.name === subject.name ? 'var(--shadow)' : 'none'
-                    }}
-                  >
-                    <h3 className="text-lg font-semibold mb-2 text-primary">{subject.name}</h3>
-                    <div className="text-sm space-y-1 text-secondary">
-                      <p>📖 {chapterCount} chapters</p>
-                      <p>📄 {totalContent} materials</p>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-        
-        {/* Selected Subject Content */}
-        {selectedSubject && (
-          <div className="bg-primary rounded-lg shadow p-6">
-            <h2 className="text-xl font-bold mb-6 text-primary">
-              {selectedSubject.name} - Study Materials
-            </h2>
-            
-            {/* Content Type Tabs */}
-            <div className="flex space-x-1 p-1 rounded-lg mb-6 bg-accent">
-              {[
-                { key: 'textbook', label: 'TextBooks', icon: '📚' },
-                { key: 'ppt', label: 'Presentations', icon: '📊' },
-                { key: 'quiz', label: 'Quizzes', icon: '🧠' }
-              ].map(section => {
-                const count = getTotalContentCount(section.key)
-                
-                return (
-                  <button
-                    key={section.key}
-                    onClick={() => setActiveSection(section.key)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-md transition-colors"
-                    style={{
-                      backgroundColor: activeSection === section.key ? 'var(--bg-primary)' : 'transparent',
-                      color: activeSection === section.key ? 'var(--blue-600)' : 'var(--text-secondary)',
-                      fontWeight: activeSection === section.key ? '600' : '400',
-                      boxShadow: activeSection === section.key ? 'var(--shadow)' : 'none'
-                    }}
-                  >
-                    <span className="text-lg">{section.icon}</span>
-                    <span className="font-medium">{section.label}</span>
-                    <span 
-                      className="text-xs px-2 py-1 rounded-full"
-                      style={{ 
-                        backgroundColor: 'var(--bg-accent)', 
-                        color: 'var(--text-secondary)' 
-                      }}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            
-            {/* Chapter Content */}
-            <div className="space-y-4">
-              {Object.entries(getCurrentSubjectContent()).map(([chapterName, chapterData]) => {
-                const sectionContent = chapterData[activeSection] || []
-                const themeClasses = getContentThemeClasses(activeSection)
-                
-                return (
-                  <div 
-                    key={chapterName} 
-                    className="border rounded-lg p-4"
-                    style={{ borderColor: 'var(--border-color)' }}
-                  >
-                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 text-primary">
-                      <span>{getContentIcon(activeSection)}</span>
-                      {chapterName}
-                      <span className="text-sm ml-2 text-muted">
-                        ({sectionContent.length} {activeSection} files)
-                      </span>
-                    </h3>
-                    
-                    {sectionContent.length > 0 ? (
-                      <div className="tablet-grid">
-                        {sectionContent.map((content, index) => (
-                          <div 
-                            key={index} 
-                            className={`border rounded p-3 hover:opacity-90 transition-opacity content-card ${themeClasses.split(' ')[0]}`}
-                            style={{ borderColor: themeClasses.includes('blue') ? 'var(--blue-100)' : themeClasses.includes('green') ? 'var(--green-100)' : 'var(--purple-100)' }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <span className="text-lg">{getContentIcon(activeSection)}</span>
-                                <div>
-                                  <h4 className="font-medium text-sm text-primary">
-                                    {content.content_title}
-                                  </h4>
-                                  <p className="text-xs text-secondary">
-                                    {content.content_type?.toUpperCase()}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                {activeSection === 'quiz' ? (
-                                  <button
-                                    onClick={() => handleStartQuiz(content)}
-                                    className="text-sm font-medium px-2 py-1 rounded border transition-colors"
-                                    style={{
-                                      color: 'var(--purple-600)',
-                                      borderColor: 'var(--purple-600)',
-                                      backgroundColor: 'transparent'
-                                    }}
-                                  >
-                                    Take Quiz
-                                  </button>
-                                ) : (
-                                  <>
-                                    {(activeSection === 'textbook' || activeSection === 'ppt') && (
-                                      <button
-                                        onClick={() => handleViewContent(content)}
-                                        className="text-sm font-medium px-2 py-1 rounded border transition-colors"
-                                        style={{
-                                          color: activeSection === 'textbook' ? 'var(--blue-600)' : 'var(--green-600)',
-                                          borderColor: activeSection === 'textbook' ? 'var(--blue-600)' : 'var(--green-600)',
-                                          backgroundColor: 'transparent'
-                                        }}
-                                      >
-                                        View
-                                      </button>
-                                    )}
-                                    <a
-                                      href={getFileUrl(content)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={() => trackContentView(content)}
-                                      className="text-sm font-medium transition-colors"
-                                      style={{ 
-                                        color: activeSection === 'textbook' ? 'var(--blue-600)' : 
-                                               activeSection === 'ppt' ? 'var(--green-600)' : 'var(--purple-600)'
-                                      }}
-                                    >
-                                      External
-                                    </a>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-6 text-muted">
-                        <span className="text-2xl mb-2 block">{getContentIcon(activeSection)}</span>
-                        <p className="text-sm">No {activeSection} materials available for this chapter</p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </main>
-      
-      {/* Embedded Content Viewer */}
-      {viewingContent && (
-        <ContentViewer
-          content={viewingContent}
-          onClose={closeContentViewer}
+      </motion.header>
+
+      {/* --- Main Content Area --- */}
+      <motion.main
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Welcome Section */}
+        <motion.div className="mb-8" variants={itemVariants}>
+          <h2 className="text-2xl sm:text-3xl font-bold text-primary mb-2">
+            Welcome to XCELERATOR, {user?.name?.split(' ')[0] || 'Student'}! 👋
+          </h2>
+          <p className="text-sm sm:text-base text-secondary">
+            Accelerate your learning journey and unlock your full potential with our advanced educational platform.
+          </p>
+        </motion.div>
+
+        {/* Stats Cards */}
+        <StatsCards
+          totalCourses={totalCourses}
+          totalAchievements={totalAchievements}
+          totalStudyHours={totalStudyHours}
+          averageScore={averageScore}
+          itemVariants={itemVariants}
+          icons={{ BookOpen, Trophy, Clock, TrendingUp }}
         />
+
+        {/* Responsive Grid: 1 column on mobile, 3 on large screens */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          {/* Left Column: spans 2 columns on desktop */}
+          <div className="lg:col-span-2 space-y-6">
+            <SubjectsSection
+              subjects={subjects}
+              subjectContent={subjectContent}
+              loading={loading}
+              handleViewContent={handleViewContent}
+              handleStartQuiz={handleStartQuiz}
+              itemVariants={itemVariants}
+              openSubject={openSubject}
+              setOpenSubject={setOpenSubject}
+              activeType={activeType}
+              setActiveType={setActiveType}
+            />
+            <RecentActivities
+              recentActivities={recentActivitiesData}
+              handleViewContent={handleViewContent}
+              handleStartQuiz={handleStartQuiz}
+              itemVariants={itemVariants}
+            />
+          </div>
+          {/* Right Column */}
+          <div className="space-y-6">
+            <UpcomingQuizzes
+              upcomingQuizzes={upcomingQuizzesData}
+              handleStartQuiz={handleStartQuiz}
+              itemVariants={itemVariants}
+            />
+            <QuickActions
+              subjects={subjects}
+              setOpenSubject={setOpenSubject}
+              setActiveType={setActiveType}
+              itemVariants={itemVariants}
+            />
+          </div>
+        </div>
+      </motion.main>
+
+      {/* --- Modals for Content Viewer and Quiz Player --- */}
+      {viewingContent && (
+        <ContentViewer content={viewingContent} onClose={closeContentViewer} />
       )}
-      
-      {/* Quiz Player */}
       {takingQuiz && (
         <QuizPlayer
           quizId={takingQuiz}
@@ -499,43 +347,45 @@ export default function StudentDashboard() {
           onClose={() => setTakingQuiz(null)}
         />
       )}
-      
-      {/* Quiz Results Modal */}
       {quizResults && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-primary rounded-lg p-8 max-w-md mx-4 text-center modal-content">
-            <div className={`text-6xl mb-4 ${quizResults.passed ? 'text-green-600' : 'text-red-600'}`}>
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <motion.div
+            className="bg-card rounded-lg p-6 sm:p-8 max-w-md w-full mx-auto text-center shadow-xl"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.8, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+          >
+            <div className={`text-6xl mb-4 ${quizResults.passed ? 'text-green-500' : 'text-blue-600'}`}>
               {quizResults.passed ? '🎉' : '📚'}
             </div>
             <h3 className="text-2xl font-bold mb-2 text-primary">Quiz Completed!</h3>
-            <div className="text-lg mb-4 text-primary">
+            <div className="text-lg mb-4 text-secondary">
               Score: {quizResults.score}/{quizResults.totalMarks} ({quizResults.percentage}%)
             </div>
-            <p className="mb-6 text-secondary">{quizResults.message}</p>
+            <p className="mb-6 text-green-700">{quizResults.message}</p>
             <div className="space-y-3">
-              <div className="w-full rounded-full h-4" style={{ backgroundColor: 'var(--gray-200)' }}>
-                <div 
-                  className="h-4 rounded-full transition-all duration-1000"
-                  style={{ 
-                    width: `${quizResults.percentage}%`,
-                    backgroundColor: quizResults.passed ? 'var(--green-600)' : 'var(--red-600)'
+              <div className="w-full rounded-full h-4 bg-gray-200">
+                <motion.div
+                  className="h-4 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${quizResults.percentage}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  style={{
+                    backgroundColor: quizResults.passed ? '#22c55e' : '#2563eb'
                   }}
-                ></div>
+                ></motion.div>
               </div>
-              <button
+              <Button
                 onClick={closeQuizResults}
-                className="px-6 py-2 rounded transition-opacity hover:opacity-90"
-                style={{ 
-                  backgroundColor: 'var(--blue-600)', 
-                  color: 'white' 
-                }}
+                className="w-full bg-blue-600 text-white hover:bg-blue-700"
               >
                 Continue Learning
-              </button>
+              </Button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
-  )
+  );
 }

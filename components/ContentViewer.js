@@ -26,7 +26,7 @@ export default function ContentViewer({ content, onClose }) {
         // PPT files
         const fileId = url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1]
         if (fileId) {
-          return `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`
+          return `https://docs.google.com/presentation/d/${fileId}/embed?start=true&loop=false&delayms=3000`
         }
       }
       // PPT files
